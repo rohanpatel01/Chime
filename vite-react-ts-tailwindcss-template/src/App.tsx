@@ -11,6 +11,9 @@ type MessageBody = {
 const outputPins = [18, 19, 22, 23];
 const defultOutputPin = outputPins[0];
 
+// send the time on connect to pair
+let newDateTime;
+
 function App() {
   const { lastMessage, sendMessage, readyState } = useWebSocket(
     "wss://75kun89lml.execute-api.us-east-2.amazonaws.com/dev"
@@ -47,6 +50,26 @@ function App() {
         },
       })
     );
+
+    // send dateTime
+    newDateTime = new Date();
+    let dateTimeHour = newDateTime.getHours();
+    let dateTimeMinute = newDateTime.getMinutes();
+    console.log("NewDateTime", newDateTime);
+    console.log("hours", dateTimeHour);
+    console.log("minute", dateTimeMinute);
+
+    sendMessage(
+      JSON.stringify({
+        action: "msg",
+        type: "info",
+        body: { // type ??
+          bodyHour: dateTimeHour,
+          bodyMinute: dateTimeMinute,
+        }
+      })
+    )
+    
 
     console.log("Send Pin Mode CMD");
 

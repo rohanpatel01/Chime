@@ -60,6 +60,17 @@ void handleMessage(uint8_t *payload) {
     return;
   }
 
+  // send date and time over
+  if (strcmp(doc["type"], "info") == 0) {
+    JsonObject timeDoc = doc["body"];
+    long hour = timeDoc["bodyHour"];
+    long minute = timeDoc["bodyMinute"];
+    Serial.println(hour);
+    Serial.println(minute);
+
+    Serial.println("Got hour");
+  }
+
   if (strcmp(doc["type"], "cmd") == 0) {
     if (!doc["body"].is<JsonObject>()) {
       sendErrorMessage("invalid command body");
@@ -67,22 +78,7 @@ void handleMessage(uint8_t *payload) {
     }
 
     if (strcmp(doc["body"]["type"], "pinMode") == 0) {
-      /*
-      Uncomment this code for better validation of pinMode command
-
-      if (!doc["body"]["mode"].is<const char *>()) {
-        sendErrorMessage("invalid pinMode mode type");
-        return;
-      }
-
-      if (strcmp(doc["body"]["mode"], "input") != 0 &&
-          strcmp(doc["body"]["mode"], "input_pullup") != 0 &&
-          strcmp(doc["body"]["mode"], "output") != 0) {
-        sendErrorMessage("invalid pinMode mode value");
-        return;
-      }
-      */
-
+      // comment here was for better validation for pin mode - just visit his repo if need this
       pinMode(doc["body"]["pin"], toMode(doc["body"]["mode"]));
       sendOkMessage();
       return;

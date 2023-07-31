@@ -16,12 +16,12 @@ const apiGatewayManagementApi = new ApiGatewayManagementApi({
 })
 const clientsTable = process.env["CLIENTS_TABLE_NAME"] || "";
 const textEncoder = new TextEncoder();
+let dateTime;
 
 export const handle = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   const connectionId = event.requestContext.connectionId as string;
   const routeKey = event.requestContext.routeKey as string;
   const body = event.body || "";
-
 
   switch (routeKey) {
     case "$connect":
@@ -48,8 +48,7 @@ const handleConnect = async (connectionId: string): Promise<APIGatewayProxyResul
     }),
   );
 
-  // sendMessage(connectionId, JSON.stringify({ action: "msg", type: "warning", body: "no recipient" }))
-  // console.log("send message inside connect")
+  // was send date time but handle this with react front end
 
   return responseOK;
 }
@@ -69,7 +68,6 @@ const handleDisconnect = async (connectionId: string): Promise<APIGatewayProxyRe
   return responseOK;
 
 };
-
 
 const handleMsg = async (thisConnectionId: string, body: string): Promise<APIGatewayProxyResult> => {
   const output = await dynamodbClient.send(
