@@ -1,3 +1,10 @@
+/*
+  TODO:
+  - test current and alarm AM/PM
+  - send back the value that the esp has for alarm rather than the one sent just to be sure
+*/
+
+
 #include <Arduino.h>
 #include <WebSocketsClient.h>
 #include <WiFiMulti.h>
@@ -16,6 +23,23 @@
 
 WiFiMulti wifiMulti;
 WebSocketsClient wsClient;
+
+// variables for keeping local time and alarm time
+// default to 999 so alarm doesn't go off early
+uint8_t currentHour = 999;
+uint8_t currentMinute = 999;
+bool isCurrentAm = false;
+
+uint8_t alarmHour = 0;
+uint8_t alarmMinute = 0;
+bool isAlarmAm = false;
+
+void alarm() {
+  if ( (currentHour == alarmHour) && (currentMinute == alarmMinute) && (isCurrentAm == isAlarmAm)) {
+    Serial.println("Alarm!!!");
+  }
+
+}
 
 void sendErrorMessage(const char *error) {
   char msg[MSG_SIZE];
@@ -59,16 +83,52 @@ void handleMessage(uint8_t *payload) {
     sendErrorMessage("invalid message type format");
     return;
   }
+ 
+  // process current time and alarm time
+  if (strcmp(doc["type"], "info") == 0) {                      // set current time for display
+    if (strcmp(doc["body"]["type"], "currentTime") == 0) {
+      JsonObject timeDoc = doc["body"];
+      long hour = timeDoc["bodyCurrentHour"];
+      long minute = timeDoc["bodyCurrentMinute"];
+      currentMinute = minute;
 
-  // send date and time over
-  if (strcmp(doc["type"], "info") == 0) {
-    JsonObject timeDoc = doc["body"];
-    long hour = timeDoc["bodyHour"];
-    long minute = timeDoc["bodyMinute"];
-    Serial.println(hour);
-    Serial.println(minute);
+      if (hour > 12) { 
+        isCurrentAm = false;
+        currentHour = (hour - 12); // need to convert hour so not in milirary time
+        
+      } else if (hour >= 12) {
+        isCurrentAm = false; // time is PM if 12 or later during day
+        currentHour = hour; 
+      } else {
+        isCurrentAm = true; // hour is before 12 thus in the am
+        currentHour = hour; 
+      }
 
-    Serial.println("Got hour");
+      Serial.println("isCurrentAm");
+      Serial.println(isCurrentAm);
+
+    } else if (strcmp(doc["body"]["type"], "alarmTime") == 0) {   // set alarm time for alarm
+      JsonObject timeDoc = doc["body"];
+      long hour = timeDoc["bodyAlarmHour"];
+      long minute = timeDoc["bodyAlarmMinute"];
+      alarmMinute = minute;
+
+      if (hour > 12) { 
+        isAlarmAm = false;
+        alarmHour = (hour - 12);
+
+      } else if (hour >= 12) {
+        isAlarmAm = false;
+        alarmHour = hour;
+      } else {
+        isAlarmAm = true;
+        alarmHour = hour;
+      }
+    
+      Serial.println("isAlarmAm");
+      Serial.println(isAlarmAm);
+
+    } 
   }
 
   if (strcmp(doc["type"], "cmd") == 0) {
@@ -128,7 +188,7 @@ void onWSEvent(WStype_t type, uint8_t *payload, size_t length) {
 }
 
 void setup() {
-  Serial.begin(115200);
+  Serial.begin(9600);
   pinMode(LED_BUILTIN, OUTPUT);
 
   wifiMulti.addAP(WIFI_SSID, WIFI_PASSWORD);
@@ -146,4 +206,7 @@ void setup() {
 void loop() {
   digitalWrite(LED_BUILTIN, WiFi.status() == WL_CONNECTED);
   wsClient.loop();
+
+  alarm();
+
 }

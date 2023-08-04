@@ -10,7 +10,7 @@ type MessageBody = {
   body: unknown;
 };
 
-const outputPins = [18, 19, 22, 23];
+const outputPins = [18]; // , 19, 22, 23
 const defultOutputPin = outputPins[0];
 
 let newDateTime;
@@ -22,25 +22,17 @@ function App() {
   const [rawTime, setRawTime] = useState("00:00"); // default string for TimeField value
   
   // values processed by setAlarm function
-  const [hour, setHour] = useState(0)
-  const [minute, setMinute] = useState(0)
-  
-  // const [minute, setMinute] = useState(0 as Number)
-  // const setValue = (Number(newValue)) => {
-  //   setHour({ ...hour, value: newValue })
-  // }
-  
+  const [hour, setHour] = useState(0);
+  const [minute, setMinute] = useState(0);
+  const [isAm, setIsAm] = useState(true); // assume start with isAm (is the morning)
+
   // read message recieved from esp about pinValue on requested pin
   useEffect(() => {
-    if (lastMessage === null) {
-      return;
-    }
+    if (lastMessage === null) { return; }
 
     const parsedMessage = JSON.parse(lastMessage.data) as MessageBody;
 
-    if (parsedMessage.action !== "msg") {
-      return;
-    }
+    if (parsedMessage.action !== "msg") { return; }
 
     if (parsedMessage.type === "output") {
       const body = parsedMessage.body as number;
@@ -64,21 +56,7 @@ function App() {
     );
 
     // send dateTime
-    newDateTime = new Date();
-    let dateTimeHour = newDateTime.getHours();
-    let dateTimeMinute = newDateTime.getMinutes();
-
-    // send hour and minute to esp
-    sendMessage(
-      JSON.stringify({
-        action: "msg",
-        type: "info",
-        body: {
-          bodyHour: dateTimeHour,
-          bodyMinute: dateTimeMinute,
-        }
-      })
-    )
+    getDateTime();
 
     console.log("Send Pin Mode CMD");
     
@@ -104,6 +82,42 @@ function App() {
     const minuteParsed = parseInt(rawTime.substring(3), 10)
     setHour(hourParsed)
     setMinute(minuteParsed)
+    console.log("set alarm")
+
+    sendMessage(
+      JSON.stringify({
+        action: "msg",
+        type: "info",
+        body: {
+          type: "alarmTime",
+          bodyAlarmHour: hourParsed, // hourParsed
+          bodyAlarmMinute: minuteParsed, // minuteParsed
+        }
+      })
+    )
+
+    getDateTime();
+  }
+
+  function getDateTime() {
+    newDateTime = new Date();
+    let dateTimeHour = newDateTime.getHours();
+    let dateTimeMinute = newDateTime.getMinutes();
+
+    // send hour and minute to esp
+    sendMessage(
+      JSON.stringify({
+        action: "msg",
+        type: "info",
+        body: {
+          type: "currentTime",
+          bodyCurrentHour: dateTimeHour,
+          bodyCurrentMinute: dateTimeMinute,
+        }
+      })
+    )
+
+    const getDateTimeTimeout = setTimeout(getDateTime, 60000);
   }
 
   return (
@@ -122,7 +136,42 @@ function App() {
         <h4>hour: {hour}</h4>
         <h4>minute: {minute}</h4>
 
+        <div className="m-4">
+        {/* <label className="inline-flex relative items-center cursor-pointer">
+          <input
+            type="checkbox"
+            checked={isAm}
+            onChange={() => {
+              const newAmValue = !isAm;
+
+              setIsAm(newAmValue);
+              sendMessage(
+                JSON.stringify({
+                  action: "msg",
+                  type: "info",
+                  body: {
+                    type: "alarmAmPm",
+                    bodyIsAm: newAmValue
+                  }
+                })
+              );
+
+              console.log("Set AM / PM");
+            }}
+            className="sr-only peer"
+          />
+          <div className="w-14 h-7 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+          
+          <span className="ml-3 text-sm font-medium text-gray-900 dark:text-gray-300">
+            {isAm ? "AM" : "PM"}
+          </span>
+        </label> */}
+      
+      
+      </div>
+
         <button onClick={setAlarm} >Set Alarm</button>
+
 
       </div>
 
