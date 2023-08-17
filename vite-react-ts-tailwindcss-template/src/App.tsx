@@ -99,6 +99,12 @@ function App() {
     getDateTime();
   }
 
+
+  function addPeer() {
+    console.log("Add peer");
+  }
+  
+
   function getDateTime() {
     newDateTime = new Date();
     let dateTimeHour = newDateTime.getHours();
@@ -169,10 +175,11 @@ function App() {
       
       
       </div>
+        <button onClick={setAlarm}>Set Alarm</button>
+      </div>
 
-        <button onClick={setAlarm} >Set Alarm</button>
-
-
+      <div>
+        <button onClick={addPeer}>addPeer</button>
       </div>
 
       <div>

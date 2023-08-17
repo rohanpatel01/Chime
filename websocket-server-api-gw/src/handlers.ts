@@ -64,7 +64,8 @@ const handleDisconnect = async (connectionId: string): Promise<APIGatewayProxyRe
       },
     }),
   );
-
+  
+  console.log("disconnected :(");
   return responseOK;
 
 };
@@ -80,7 +81,7 @@ const handleMsg = async (thisConnectionId: string, body: string): Promise<APIGat
     for (const item of output.Items || []) {
       if (item["connectionId"].S !== thisConnectionId) {
         sendMessage(item["connectionId"].S as string, body);
-        console.log("sent message")
+        console.log("sent message");
       }
     }
 
