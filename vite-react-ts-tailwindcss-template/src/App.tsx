@@ -27,6 +27,7 @@ function App() {
   const [isAm, setIsAm] = useState(true); // assume start with isAm (is the morning)
 
   // read message recieved from esp about pinValue on requested pin
+  // from esp > websocket > react
   useEffect(() => {
     if (lastMessage === null) { return; }
 
@@ -102,6 +103,17 @@ function App() {
 
   function addPeer() {
     console.log("Add peer");
+
+    sendMessage(
+      JSON.stringify({
+        action: "msg",
+        type: "info",
+        body: {
+          type: "addPeer",
+        }
+      })
+    )
+
   }
   
 
@@ -142,37 +154,7 @@ function App() {
         <h4>hour: {hour}</h4>
         <h4>minute: {minute}</h4>
 
-        <div className="m-4">
-        {/* <label className="inline-flex relative items-center cursor-pointer">
-          <input
-            type="checkbox"
-            checked={isAm}
-            onChange={() => {
-              const newAmValue = !isAm;
-
-              setIsAm(newAmValue);
-              sendMessage(
-                JSON.stringify({
-                  action: "msg",
-                  type: "info",
-                  body: {
-                    type: "alarmAmPm",
-                    bodyIsAm: newAmValue
-                  }
-                })
-              );
-
-              console.log("Set AM / PM");
-            }}
-            className="sr-only peer"
-          />
-          <div className="w-14 h-7 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
-          
-          <span className="ml-3 text-sm font-medium text-gray-900 dark:text-gray-300">
-            {isAm ? "AM" : "PM"}
-          </span>
-        </label> */}
-      
+        <div className="m-4">      
       
       </div>
         <button onClick={setAlarm}>Set Alarm</button>

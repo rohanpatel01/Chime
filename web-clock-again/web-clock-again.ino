@@ -1,14 +1,20 @@
 /*
-  - configure pasted code from old alarm clock to new code
-    - recieve and sent - configure
-  - figure out how to send time to other units
-  - send updated time from source unit to other units to keep all synced - maybe on time recieve send time to other units
+  TODO:
 
+  get multiple devices to connect
+    - allow unit board to recieve messages via esp now during pairing phase in first few seconds of powering on
+      - issue with esp_not not being initialized
+      - issue with WS? but WS not needed for esp now communication
+      - app peer function should send message from front end to mother board that requested it
+        then mother board should send message via esp now signalling that it is trying to pair with it / send it a message
 
-  so far I believe I've configured all functions
-  need to test with at least 1 other unit to send the time
-  after - add feature to sync / send time when mother unit recieves time from server and send it to all other units
-  add game functionality
+      - rather than playing game with all boards just make it so mother board and units share their index in mac address table
+        so we only send to paired boards
+        - need to change the sendDataToAllPeers() function
+
+  reconfigure so wifi and esp_now setup are in setup and not loop - if this is possible
+
+  
 */
 
 #include <Arduino.h>
@@ -18,8 +24,8 @@
 #include <TM1637.h>
 #include <ArduinoJson.h>
 
-#define WIFI_SSID "MRK"
-#define WIFI_PASSWORD "MRK9004#"
+#define WIFI_SSID "Ronnie" // MRK
+#define WIFI_PASSWORD "Something Simple" // MRK9004# // Flimsy-Hound-21@
 
 #define WS_HOST "75kun89lml.execute-api.us-east-2.amazonaws.com"
 #define WS_PORT 443
@@ -32,16 +38,19 @@ WiFiMulti wifiMulti;
 WebSocketsClient wsClient;
 
 // variables for keeping local time and alarm time
-// default to 999 so alarm doesn't go off early
-uint8_t currentHour = 999;
-uint8_t currentMinute = 999;
+uint8_t currentHour = 99;
+uint8_t currentMinute = 99;
 bool isCurrentAm = false;
 
 uint8_t alarmHour = 0;
 uint8_t alarmMinute = 0;
 bool isAlarmAm = false;
+uint32_t wsInit = true;
 
 bool isMother = true;
+
+uint32_t oldtime = millis();
+uint32_t count = 0;
 
 int CLK = 22;
 int DIO = 4;
@@ -64,14 +73,14 @@ struct_message ESP_NOW_STRUCT;
 esp_now_peer_info_t peerInfo;
 
 // Define variables to store incoming readings
-bool incoming;
+bool incoming = false;
 bool incomingAlarmTrue;
-int incomingHour;
-int incomingMinute;
-int numAlarmPressed;
+int incomingHour = 0;
+int incomingMinute = 0;
+int numAlarmPressed = 0;
 String success;
 
-int numESPSTest = 3; // change this 
+int numESPSTest = 2; // change this 
 
 uint8_t allAddresses[3][6] = { {0x78, 0x21, 0x84, 0x9D, 0x40, 0xD0}, 
                           {0x78, 0x21, 0x84, 0x9C, 0xFA, 0x84},
@@ -90,6 +99,7 @@ void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
   else{
     success = "Delivery Fail :(";
   }
+
 }
 
 void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
@@ -107,11 +117,9 @@ void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
     displayTime(incomingHour, incomingMinute);
   }
 
-  // if ( (incomingHour == -1 ) && (incomingMinute == -1) && (incomingAlarmTrue == false) ){
-  //   wsClient.disconnect(); // disconnect board from websocket since not mother board
-  // }
-
   Serial.println("Incoming!!");
+  digitalWrite(13, 1);
+
 }
 
 // assuming time is already changed to normal time (not military) as input
@@ -130,10 +138,17 @@ void displayTime(int hour, int minute){
 }
 
 void alarm() {
-
   if ( (currentHour == alarmHour) && (currentMinute == alarmMinute) && (isCurrentAm == isAlarmAm)) {
-    Serial.println("Alarm!!!");
+
+    Serial.println("Alarm");
+    // send message to other board
+    // while(true){
+    //   // if (numAlarmPressed >= 6){
+    //   //   return;
+    //   // }
+    // }
   }
+
 }
 
 void sendDataToAllPeers() {
@@ -146,7 +161,7 @@ void sendDataToAllPeers() {
     Serial.println("Contacted ");
     Serial.println(i);
 
-    // esp_err_t result = esp_now_send(allAddresses[i], (uint8_t *) &ESP_NOW_STRUCT, sizeof(ESP_NOW_STRUCT));
+    esp_err_t result = esp_now_send(allAddresses[i], (uint8_t *) &ESP_NOW_STRUCT, sizeof(ESP_NOW_STRUCT));
   }
 }
 
@@ -255,6 +270,7 @@ void handleMessage(uint8_t *payload) {
   // process current time and alarm time
   if (strcmp(doc["type"], "info") == 0) {                      // set current time for display
     if (strcmp(doc["body"]["type"], "currentTime") == 0) {
+
       JsonObject timeDoc = doc["body"];
       long hour = timeDoc["bodyCurrentHour"];
       long minute = timeDoc["bodyCurrentMinute"];
@@ -285,8 +301,6 @@ void handleMessage(uint8_t *payload) {
       Serial.println("isCurrentAm");
       Serial.println(isCurrentAm);
 
-
-
     } else if (strcmp(doc["body"]["type"], "alarmTime") == 0) {   // set alarm time for alarm
       JsonObject timeDoc = doc["body"];
       long hour = timeDoc["bodyAlarmHour"];
@@ -308,7 +322,17 @@ void handleMessage(uint8_t *payload) {
       Serial.println("isAlarmAm");
       Serial.println(isAlarmAm);
 
-    } 
+    } else if (strcmp(doc["body"]["type"], "addPeer") == 0) {
+      ESP_NOW_STRUCT.alarmTrue = false;
+      ESP_NOW_STRUCT.incoming = true;
+      ESP_NOW_STRUCT.hour = currentHour;
+      ESP_NOW_STRUCT.minute = currentMinute;
+      // ESP_NOW_STRUCT.numAlarmPressedInfo = 0;
+
+      sendDataToAllPeers();
+      Serial.println("add Peer from front end, esp delivered");
+       
+    }
   }
 
   if (strcmp(doc["type"], "cmd") == 0) {
@@ -329,12 +353,12 @@ void handleMessage(uint8_t *payload) {
       sendOkMessage();
       return;
     }
-
+    // respond to WS command from react for digitalRead
     if (strcmp(doc["body"]["type"], "digitalRead") == 0) {
       auto value = digitalRead(doc["body"]["pin"]);
 
       char msg[MSG_SIZE];
-
+      // send message back to react front end for digital read
       sprintf(msg, "{\"action\":\"msg\",\"type\":\"output\",\"body\":%d}",
               value);
 
@@ -390,7 +414,7 @@ void ESP_INIT() {
     memcpy(peerInfo.peer_addr, allAddresses[i], 6); 
     peerInfo.channel = 0;  
     peerInfo.encrypt = false;
-
+    
     // Add peer success      
     if (esp_now_add_peer(&peerInfo) != ESP_OK)
     {
@@ -415,35 +439,15 @@ void setup() {
   // setup ESP_NOW communication
   ESP_INIT();
   
-  // send data to peers stating they are not mother board
-  // alarmTrue being false and time being -1 signals that reciever is not mother board
-  // ESP_NOW_STRUCT.alarmTrue = false;
-  // ESP_NOW_STRUCT.hour = -1;
-  // ESP_NOW_STRUCT.minute = -1;
-  // sendDataToAllPeers();
-
-  // connect to web socket
-  // wifiMulti.addAP(WIFI_SSID, WIFI_PASSWORD);
-  // while (wifiMulti.run() != WL_CONNECTED) {
-  //   delay(100);
-  // }
-
-  // Serial.println("Connected");
-  // wsClient.beginSSL(WS_HOST, WS_PORT, WS_URL, "", "wss");
-  // wsClient.onEvent(onWSEvent);
-  
 }
 
-void loop() {
+void waitForConnection() {
 
-  // wait to recieve incoming message saying this is a unit
+  Serial.println("waiting for connection");
 
-  static uint32_t oldtime=millis();
-  static uint32_t count = 0;
-  static uint32_t wsInit = true;
+  while (count < 5)  {
 
-  if (count < 5) {
-    if ( (millis()-oldtime) > 1000) {
+    if ( (millis() - oldtime) > 1000) {
       oldtime = millis();
       count++;
       Serial.println(count);
@@ -451,8 +455,33 @@ void loop() {
 
     if (incoming) {
       isMother = false;
+      Serial.println("is not mother");
+      Serial.println("is not mother");
+      Serial.println("is not mother");
+      Serial.println("is not mother");
+      Serial.println("is not mother");
+
     }
   }
+
+  // while (true) {
+  //   if (incoming) {
+  //     Serial.println("is not mother");
+  //     Serial.println("is not mother");
+  //     Serial.println("is not mother");
+  //     Serial.println("is not mother");
+  //     Serial.println("is not mother");
+  //   }
+  // }
+
+}
+
+void loop() {
+
+  // wait to recieve incoming message saying this is a unit
+  // if ( (count < 5) && (isMother) ) {
+    // waitForConnection();
+  // }
 
   if (isMother) {
 
@@ -462,6 +491,7 @@ void loop() {
 
       while (wifiMulti.run() != WL_CONNECTED) {
         delay(100);
+        Serial.println("attempting WS connection");
       }
 
       Serial.println("WIFI Connected");
@@ -469,6 +499,7 @@ void loop() {
       wsClient.onEvent(onWSEvent);
 
       wsInit = false;
+      Serial.println("wsINIT");
     }
 
     // handle everything
@@ -481,6 +512,12 @@ void loop() {
     // units should only recieve time and worry about the game
     Serial.println("unit");
     delay(1000);
+
+    // ESP_NOW_STRUCT.incoming = true;
+    // esp_err_t result = esp_now_send(allAddresses[1], (uint8_t *) &ESP_NOW_STRUCT, sizeof(ESP_NOW_STRUCT));
+    // delay(5000);
+
+
   }
 }
 
