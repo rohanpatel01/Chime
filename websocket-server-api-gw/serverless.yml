@@ -139,6 +139,10 @@ resources:
         AttributeDefinitions:
           - AttributeName: connectionId
             AttributeType: S
+          # - AttributeName: nickname
+          #   AttributeType: S
         KeySchema:
           - AttributeName: connectionId
             KeyType: HASH
+          # - AttributeName: nickname
+          #   KeyType: HASH

@@ -258,12 +258,12 @@ void handleMessage(uint8_t *payload) {
   if (error) {
     Serial.print(F("deserializeJson() failed: "));
     Serial.println(error.f_str());
-    sendErrorMessage(error.c_str());
+    // sendErrorMessage(error.c_str());
     return;
   }
 
   if (!doc["type"].is<const char *>()) {
-    sendErrorMessage("invalid message type format");
+    // sendErrorMessage("invalid message type format");
     return;
   }
  
@@ -337,7 +337,7 @@ void handleMessage(uint8_t *payload) {
 
   if (strcmp(doc["type"], "cmd") == 0) {
     if (!doc["body"].is<JsonObject>()) {
-      sendErrorMessage("invalid command body");
+      // sendErrorMessage("invalid command body");
       return;
     }
 
@@ -350,7 +350,11 @@ void handleMessage(uint8_t *payload) {
 
     if (strcmp(doc["body"]["type"], "digitalWrite") == 0) {
       digitalWrite(doc["body"]["pin"], doc["body"]["value"]);
-      sendOkMessage();
+      wsClient.sendTXT("{\"action\":\"msg\",\"type\":\"status\",\"body\":\"ok\"}");
+      String espID = "ESP" + String(thisMacIndex);
+      wsClient.sendTXT(espID);
+
+      // sendOkMessage();
       return;
     }
     // respond to WS command from react for digitalRead
@@ -366,11 +370,11 @@ void handleMessage(uint8_t *payload) {
       return;
     }
 
-    sendErrorMessage("unsupported command type");
+    // sendErrorMessage("unsupported command type");
     return;
   }
 
-  sendErrorMessage("unsupported message type");
+  // sendErrorMessage("unsupported message type");
   return;
 }
 

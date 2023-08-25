@@ -3,6 +3,7 @@ import { DeleteItemCommand, DynamoDBClient, PutItemCommand, ScanCommand } from '
 import { ApiGatewayManagementApi, GoneException } from "@aws-sdk/client-apigatewaymanagementapi"
 import { TextEncoder } from "util";
 import { send } from "process";
+import { connect } from "http2";
 
 
 const responseOK = {
@@ -16,7 +17,9 @@ const apiGatewayManagementApi = new ApiGatewayManagementApi({
 })
 const clientsTable = process.env["CLIENTS_TABLE_NAME"] || "";
 const textEncoder = new TextEncoder();
-let dateTime;
+
+var motherUnitConnectionId: string = "";
+var subUnitConnectionId: string[] = [];
 
 export const handle = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   const connectionId = event.requestContext.connectionId as string;
@@ -37,6 +40,24 @@ export const handle = async (event: APIGatewayProxyEvent): Promise<APIGatewayPro
 
 
 const handleConnect = async (connectionId: string): Promise<APIGatewayProxyResult> => {
+
+  console.log("on connect");
+
+  if (motherUnitConnectionId === ""){
+    motherUnitConnectionId = connectionId;
+    console.log("mother client");
+    console.log(connectionId);
+    
+  } else {
+    subUnitConnectionId.push(connectionId);
+    console.log("sub unit client");
+    console.log(connectionId);
+  }
+
+  console.log(motherUnitConnectionId);
+  console.log(subUnitConnectionId);
+
+   
   await dynamodbClient.send(
     new PutItemCommand({
       TableName: clientsTable,
@@ -49,11 +70,32 @@ const handleConnect = async (connectionId: string): Promise<APIGatewayProxyResul
   );
 
   // was send date time but handle this with react front end
+  console.log(connectionId);
 
   return responseOK;
 }
 
 const handleDisconnect = async (connectionId: string): Promise<APIGatewayProxyResult> => {
+
+  console.log("before disconnect");
+  console.log("mother", motherUnitConnectionId);
+  console.log("sub unit", subUnitConnectionId);
+
+  // remove who connected from out list
+  if (connectionId === motherUnitConnectionId){ // if mother is removed also remove all others?
+    console.log("removing mother", connectionId);
+    motherUnitConnectionId = "";
+
+  } else if (subUnitConnectionId.indexOf(connectionId) != -1){ // remove sub unit connection ID
+    subUnitConnectionId.splice(subUnitConnectionId.indexOf(connectionId) , 1);
+    console.log("removing sub", connectionId);
+  }
+
+  console.log("after disconnect");
+  console.log("mother", motherUnitConnectionId);
+  console.log("sub unit", subUnitConnectionId);
+
+
   await dynamodbClient.send(
     new DeleteItemCommand({
       TableName: clientsTable,
@@ -78,10 +120,12 @@ const handleMsg = async (thisConnectionId: string, body: string): Promise<APIGat
   );
 
   if (output.Count && output.Count > 0) {
+    console.log("output items: ", output.Items);
+
     for (const item of output.Items || []) {
       if (item["connectionId"].S !== thisConnectionId) {
-        sendMessage(item["connectionId"].S as string, body);
-        console.log("sent message");
+        sendMessage(item["connectionId"].S as string, body); // send message to all other connected devices
+        // console.log("sent message");
       }
     }
 
