@@ -1,7 +1,21 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import "./App.css";
 import useWebSocket from "react-use-websocket";
 import TimeField from 'react-simple-timefield';
+
+/*
+TODO
+1: send message to a specific client
+2: display devices connected
+3: have a way to select a device (to send alarm to in game)
+4: for other things to signal game is over and such (have a mode to send message to all)
+  - recipient = all
+  - if recipient = all (in ws code) just send to all units
+
+2: be able to specify which client you want to talk to
+  - either mother client or a specific sub client (b/c that's what we're gonna do for the game)
+
+*/
 
 
 type MessageBody = {
@@ -35,21 +49,29 @@ function App() {
 
     if (parsedMessage.action !== "msg") { return; }
 
+    // reading message recieved from esp to react front end
+    if (parsedMessage.type === "status"){
+      console.log("react sent digital write, ESP response:", parsedMessage.body);
+    }
+
     if (parsedMessage.type === "output") {
       const body = parsedMessage.body as number;
-
       setPinValue(body === 0 ? false : true);
     }
+
   }, [lastMessage, setPinValue]);
 
   // setup commands for esp - requesting pin data via digital read and sending time
   // send digital read command
+
+  // in body maybe put which esp you want to talk to or which connected device to talk to
   useEffect(() => {
     sendMessage(
       JSON.stringify({
         action: "msg",
         type: "cmd",
         body: {
+          recipient: "mother",
           type: "digitalRead",
           pin: defultOutputPin,
         },
@@ -58,6 +80,7 @@ function App() {
 
     // send dateTime
     getDateTime();
+    // syncConnectionID(); // on first connect ask for connectionID from WS
 
     console.log("Send Pin Mode CMD");
     
@@ -68,6 +91,7 @@ function App() {
           action: "msg",
           type: "cmd",
           body: {
+            recipient: "mother",
             type: "pinMode",
             pin,
             mode: "output",
@@ -77,6 +101,21 @@ function App() {
     });
 
   }, []);
+
+  // function syncConnectionID() {
+    
+  //   sendMessage(
+  //     JSON.stringify({
+  //       action: "msg",
+  //       type: "sync",
+  //       body: ""
+  //     })
+  //   );
+
+  //   // every 60 seconds sync connectionID also make sure when you connect or disconnect 
+  //   // you also send data from WS to react
+  //   const syncConnectionIDTimeout = setTimeout(syncConnectionID, 60000);    
+  // }
 
   function setAlarm(){
     const hourParsed = parseInt(rawTime.substring(0, 2), 10)
@@ -128,6 +167,7 @@ function App() {
         action: "msg",
         type: "info",
         body: {
+          recipient: "mother",
           type: "currentTime",
           bodyCurrentHour: dateTimeHour,
           bodyCurrentMinute: dateTimeMinute,
@@ -178,6 +218,7 @@ function App() {
                 action: "msg",
                 type: "cmd",
                 body: {
+                  recipient: "mother",
                   type: "digitalRead",
                   pin: newPin,
                 },
@@ -210,6 +251,7 @@ function App() {
                   type: "cmd",
                   body: {
                     type: "digitalWrite",
+                    recipient: "mother",
                     pin: selectedPin,
                     value: newValue ? 1 : 0,
                   },

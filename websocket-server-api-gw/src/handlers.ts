@@ -2,7 +2,7 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { DeleteItemCommand, DynamoDBClient, PutItemCommand, ScanCommand } from '@aws-sdk/client-dynamodb'
 import { ApiGatewayManagementApi, GoneException } from "@aws-sdk/client-apigatewaymanagementapi"
 import { TextEncoder } from "util";
-import { send } from "process";
+import { disconnect, send } from "process";
 import { connect } from "http2";
 
 
@@ -18,8 +18,10 @@ const apiGatewayManagementApi = new ApiGatewayManagementApi({
 const clientsTable = process.env["CLIENTS_TABLE_NAME"] || "";
 const textEncoder = new TextEncoder();
 
-var motherUnitConnectionId: string = "";
+var reactConnectionId: string = "";
 var subUnitConnectionId: string[] = [];
+var latestDeviceSent = "";
+
 
 export const handle = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   const connectionId = event.requestContext.connectionId as string;
@@ -41,23 +43,16 @@ export const handle = async (event: APIGatewayProxyEvent): Promise<APIGatewayPro
 
 const handleConnect = async (connectionId: string): Promise<APIGatewayProxyResult> => {
 
-  console.log("on connect");
+  console.log("device connected ", connectionId);
 
-  if (motherUnitConnectionId === ""){
-    motherUnitConnectionId = connectionId;
-    console.log("mother client");
-    console.log(connectionId);
-    
-  } else {
-    subUnitConnectionId.push(connectionId);
-    console.log("sub unit client");
-    console.log(connectionId);
-  }
+  latestDeviceSent = connectionId;
 
-  console.log(motherUnitConnectionId);
-  console.log(subUnitConnectionId);
+  if (reactConnectionId !== ""){
+    console.log("possible esp connected: ", connectionId);
+    console.log("current reactID: ", reactConnectionId);
+    console.log("current sub units: ", subUnitConnectionId);
+  } 
 
-   
   await dynamodbClient.send(
     new PutItemCommand({
       TableName: clientsTable,
@@ -77,23 +72,18 @@ const handleConnect = async (connectionId: string): Promise<APIGatewayProxyResul
 
 const handleDisconnect = async (connectionId: string): Promise<APIGatewayProxyResult> => {
 
-  console.log("before disconnect");
-  console.log("mother", motherUnitConnectionId);
-  console.log("sub unit", subUnitConnectionId);
+  // if (connectionId === reactConnectionId){ 
+  //   console.log("removing react", reactConnectionId);
+  //   reactConnectionId = "";
 
-  // remove who connected from out list
-  if (connectionId === motherUnitConnectionId){ // if mother is removed also remove all others?
-    console.log("removing mother", connectionId);
-    motherUnitConnectionId = "";
+  // } //else if (subUnitConnectionId.indexOf(connectionId) != -1){ // remove sub unit connection ID
+  //   console.log("before remove sub: ", subUnitConnectionId);
+  //   subUnitConnectionId.splice(subUnitConnectionId.indexOf(connectionId) , 1);
+  //   console.log("removed: ", connectionId);
+  //   console.log("after removing sub", subUnitConnectionId);
+  // }
 
-  } else if (subUnitConnectionId.indexOf(connectionId) != -1){ // remove sub unit connection ID
-    subUnitConnectionId.splice(subUnitConnectionId.indexOf(connectionId) , 1);
-    console.log("removing sub", connectionId);
-  }
-
-  console.log("after disconnect");
-  console.log("mother", motherUnitConnectionId);
-  console.log("sub unit", subUnitConnectionId);
+  console.log("removing: ", connectionId);
 
 
   await dynamodbClient.send(
@@ -113,6 +103,28 @@ const handleDisconnect = async (connectionId: string): Promise<APIGatewayProxyRe
 };
 
 const handleMsg = async (thisConnectionId: string, body: string): Promise<APIGatewayProxyResult> => {
+  
+  reactConnectionId = thisConnectionId;
+
+  if (latestDeviceSent === thisConnectionId){
+    latestDeviceSent = "";
+  }
+
+  var payload = JSON.parse(body);
+  var payloadBody = payload.body || "no recipient"; // evaluate to no recipient if JSON doesn't have recipient
+
+  // later make it so that you don't send out message recieved from front or esp to go through if only
+  // one way communication to server
+  // ex: when ESP pairs it shouldn't sent that to the front end but for testing it's ok
+  if ( (latestDeviceSent != "") && (payload.body === "connectedESP") ){
+    console.log("ESP Conncected: ", payload.body, "ConnectionID: ", latestDeviceSent);
+  }
+  
+  console.log("body: ", body);
+  console.log("payload: ", payload);
+  console.log("payloadBody: ", payloadBody)
+  console.log("react ID: ", thisConnectionId);
+  
   const output = await dynamodbClient.send(
     new ScanCommand({
       TableName: clientsTable,
@@ -122,12 +134,40 @@ const handleMsg = async (thisConnectionId: string, body: string): Promise<APIGat
   if (output.Count && output.Count > 0) {
     console.log("output items: ", output.Items);
 
+    // create new array
+    var currentDevicesConnected: string[] = [];
+
     for (const item of output.Items || []) {
       if (item["connectionId"].S !== thisConnectionId) {
+
+        if ( (item["connectionId"].S as string) !== reactConnectionId ) {
+          currentDevicesConnected.push(item["connectionId"].S as string);
+        }
+
         sendMessage(item["connectionId"].S as string, body); // send message to all other connected devices
-        // console.log("sent message");
+        // latestDeviceSent = item["connectionId"].S as string;
+        console.log("sent to (ID): ", item["connectionId"].S);
+        console.log("react ID: ", reactConnectionId);
+        console.log("sent to all others");
+      
       }
     }
+    console.log("sent subunits: ", subUnitConnectionId);
+    console.log("sent react: ", thisConnectionId);
+
+    subUnitConnectionId = currentDevicesConnected;
+
+    // send message to react front end of devices connecting 
+    sendMessage( reactConnectionId,
+      JSON.stringify({
+        action: "msg",
+        type: "status",
+        body: {
+          subUnitID: subUnitConnectionId,
+          reactID: reactConnectionId,
+        },
+      })
+    )
 
   } else {
     await sendMessage(thisConnectionId, JSON.stringify({ action: "msg", type: "warning", body: "no recipient" }));

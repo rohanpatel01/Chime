@@ -233,6 +233,10 @@ void sendErrorMessage(const char *error) {
   wsClient.sendTXT(msg);
 }
 
+void sendConnectionMessage(){
+  wsClient.sendTXT("{\"action\":\"msg\",\"type\":\"status\",\"body\":\"connectedESP\"}");
+}
+
 void sendOkMessage() {
   wsClient.sendTXT("{\"action\":\"msg\",\"type\":\"status\",\"body\":\"ok\"}");
 }
@@ -344,17 +348,19 @@ void handleMessage(uint8_t *payload) {
     if (strcmp(doc["body"]["type"], "pinMode") == 0) {
       // comment here was for better validation for pin mode - just visit his repo if need this
       pinMode(doc["body"]["pin"], toMode(doc["body"]["mode"]));
-      sendOkMessage();
+      sendConnectionMessage();
+      // sendOkMessage();
       return;
+      
     }
 
     if (strcmp(doc["body"]["type"], "digitalWrite") == 0) {
       digitalWrite(doc["body"]["pin"], doc["body"]["value"]);
       wsClient.sendTXT("{\"action\":\"msg\",\"type\":\"status\",\"body\":\"ok\"}");
       String espID = "ESP" + String(thisMacIndex);
-      wsClient.sendTXT(espID);
+      wsClient.sendTXT(espID); // forbidden
 
-      // sendOkMessage();
+      sendOkMessage();
       return;
     }
     // respond to WS command from react for digitalRead
@@ -504,6 +510,7 @@ void loop() {
 
       wsInit = false;
       Serial.println("wsINIT");
+      sendConnectionMessage();
     }
 
     // handle everything
@@ -524,8 +531,3 @@ void loop() {
 
   }
 }
-
-
-  
-
-
