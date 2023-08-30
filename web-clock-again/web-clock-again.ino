@@ -236,7 +236,13 @@ void sendErrorMessage(const char *error) {
 void sendConnectionMessage(){
 
   char msg[MSG_SIZE];
-  sprintf(msg, "{\"action\":\"msg\",\"type\":\"macIndex\",\"body\":%d}",
+  // sprintf(msg, "{\"action\":\"msg\",\"type\":\"macIndex\",\"body\":%d}",thisMacIndex);
+
+  // "action: msg",
+  // "type: macIndex",
+  // "body: %d" // thisMacIndex
+
+  sprintf(msg, "{\"action\":\"msg\",\"type\":\"connect\",\"body\": { \"ESPConnectionID\" : \"\", \"macIndex\":%d} }",
           thisMacIndex);
 
   wsClient.sendTXT(msg);

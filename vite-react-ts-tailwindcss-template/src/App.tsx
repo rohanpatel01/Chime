@@ -60,7 +60,7 @@ function App() {
     //   console.log("react sent digital write, ESP response:", parsedMessage.body);
     // }
 
-    if (parsedMessage.type === "macIndex"){
+    if (parsedMessage.type === "connect"){
       // only set if esp not already added
       if (ESP_Devices.indexOf(parsedMessage.body as number) === -1 ){
         setESP_Devices([
