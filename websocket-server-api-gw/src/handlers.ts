@@ -20,7 +20,7 @@ const textEncoder = new TextEncoder();
 
 var reactConnectionId: string = "";
 var subUnitConnectionId: string[] = [];
-var latestDeviceSent = "";
+var latestDeviceConnectionID = "none";
 
 
 export const handle = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
@@ -45,7 +45,7 @@ const handleConnect = async (connectionId: string): Promise<APIGatewayProxyResul
 
   console.log("device connected ", connectionId);
 
-  latestDeviceSent = connectionId;
+  latestDeviceConnectionID = connectionId;
 
   if (reactConnectionId !== ""){
     console.log("possible esp connected: ", connectionId);
@@ -72,17 +72,6 @@ const handleConnect = async (connectionId: string): Promise<APIGatewayProxyResul
 
 const handleDisconnect = async (connectionId: string): Promise<APIGatewayProxyResult> => {
 
-  // if (connectionId === reactConnectionId){ 
-  //   console.log("removing react", reactConnectionId);
-  //   reactConnectionId = "";
-
-  // } //else if (subUnitConnectionId.indexOf(connectionId) != -1){ // remove sub unit connection ID
-  //   console.log("before remove sub: ", subUnitConnectionId);
-  //   subUnitConnectionId.splice(subUnitConnectionId.indexOf(connectionId) , 1);
-  //   console.log("removed: ", connectionId);
-  //   console.log("after removing sub", subUnitConnectionId);
-  // }
-
   console.log("removing: ", connectionId);
 
 
@@ -106,68 +95,47 @@ const handleMsg = async (thisConnectionId: string, body: string): Promise<APIGat
   
   reactConnectionId = thisConnectionId;
 
-  if (latestDeviceSent === thisConnectionId){
-    latestDeviceSent = "";
-  }
+  // if (latestDeviceConnectionID === thisConnectionId){
+  //   latestDeviceConnectionID = "";
+  // }
 
-  var payload = JSON.parse(body);
-  var payloadBody = payload.body || "no recipient"; // evaluate to no recipient if JSON doesn't have recipient
+  // var payload = JSON.parse(body); // payload.body
+  // var payloadBody = payload.body || "no recipient"; // evaluate to no recipient if JSON doesn't have recipient
 
-  // later make it so that you don't send out message recieved from front or esp to go through if only
-  // one way communication to server
-  // ex: when ESP pairs it shouldn't sent that to the front end but for testing it's ok
-  if ( (latestDeviceSent != "") && (payload.body === "connectedESP") ){
-    console.log("ESP Conncected: ", payload.body, "ConnectionID: ", latestDeviceSent);
-  }
-  
-  console.log("body: ", body);
-  console.log("payload: ", payload);
-  console.log("payloadBody: ", payloadBody)
-  console.log("react ID: ", thisConnectionId);
-  
   const output = await dynamodbClient.send(
     new ScanCommand({
       TableName: clientsTable,
     }),
   );
 
-  if (output.Count && output.Count > 0) {
-    console.log("output items: ", output.Items);
 
-    // create new array
-    var currentDevicesConnected: string[] = [];
+  // later figure out how to send message to one device
+  if (output.Count && output.Count > 0) {
 
     for (const item of output.Items || []) {
       if (item["connectionId"].S !== thisConnectionId) {
 
-        if ( (item["connectionId"].S as string) !== reactConnectionId ) {
-          currentDevicesConnected.push(item["connectionId"].S as string);
-        }
-
         sendMessage(item["connectionId"].S as string, body); // send message to all other connected devices
-        // latestDeviceSent = item["connectionId"].S as string;
-        console.log("sent to (ID): ", item["connectionId"].S);
-        console.log("react ID: ", reactConnectionId);
-        console.log("sent to all others");
-      
+        // console.log("sent to (ID): ", item["connectionId"].S);
+        // console.log("react ID: ", reactConnectionId);
+        // console.log("sent to all others");
       }
     }
-    console.log("sent subunits: ", subUnitConnectionId);
-    console.log("sent react: ", thisConnectionId);
 
-    subUnitConnectionId = currentDevicesConnected;
+    // console.log("sent subunits: ", subUnitConnectionId);
+    // console.log("sent react: ", thisConnectionId);
 
     // send message to react front end of devices connecting 
-    sendMessage( reactConnectionId,
-      JSON.stringify({
-        action: "msg",
-        type: "status",
-        body: {
-          subUnitID: subUnitConnectionId,
-          reactID: reactConnectionId,
-        },
-      })
-    )
+    // sendMessage( reactConnectionId,
+    //   JSON.stringify({
+    //     action: "msg",
+    //     type: "status",
+    //     body: {
+    //       subUnitID: subUnitConnectionId,
+    //       reactID: reactConnectionId,
+    //     },
+    //   })
+    // )
 
   } else {
     await sendMessage(thisConnectionId, JSON.stringify({ action: "msg", type: "warning", body: "no recipient" }));
@@ -175,6 +143,9 @@ const handleMsg = async (thisConnectionId: string, body: string): Promise<APIGat
 
   return responseOK;
 };
+
+
+
 
 const sendMessage = async (connectionId: string, body: string) => {
   try{

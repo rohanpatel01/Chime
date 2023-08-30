@@ -15,6 +15,10 @@ TODO
 2: be able to specify which client you want to talk to
   - either mother client or a specific sub client (b/c that's what we're gonna do for the game)
 
+
+  what if we leave an entry in esp32 pair command empty
+  then as it passes through WS it gets filled when detected
+    - issue with detecting the message however
 */
 
 
@@ -40,6 +44,8 @@ function App() {
   const [minute, setMinute] = useState(0);
   const [isAm, setIsAm] = useState(true); // assume start with isAm (is the morning)
 
+  const [ESP_Devices, setESP_Devices] = useState<number[]>([]);
+
   // read message recieved from esp about pinValue on requested pin
   // from esp > websocket > react
   useEffect(() => {
@@ -50,14 +56,30 @@ function App() {
     if (parsedMessage.action !== "msg") { return; }
 
     // reading message recieved from esp to react front end
-    if (parsedMessage.type === "status"){
-      console.log("react sent digital write, ESP response:", parsedMessage.body);
+    // if (parsedMessage.type === "status"){
+    //   console.log("react sent digital write, ESP response:", parsedMessage.body);
+    // }
+
+    if (parsedMessage.type === "macIndex"){
+      // only set if esp not already added
+      if (ESP_Devices.indexOf(parsedMessage.body as number) === -1 ){
+        setESP_Devices([
+          ...ESP_Devices,
+          parsedMessage.body as number
+        ])
+      }
+      
     }
 
-    if (parsedMessage.type === "output") {
-      const body = parsedMessage.body as number;
-      setPinValue(body === 0 ? false : true);
-    }
+    console.log("ESP Connected - mac index: ", parsedMessage.body);
+    console.log("Connected Devices: ", ESP_Devices);
+
+
+
+    // if (parsedMessage.type === "output") {
+    //   const body = parsedMessage.body as number;
+    //   setPinValue(body === 0 ? false : true);
+    // }
 
   }, [lastMessage, setPinValue]);
 
